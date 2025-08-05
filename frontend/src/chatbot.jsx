@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import axios from 'axios';
 import './chatApp.css';
 
@@ -62,7 +62,7 @@ const ChatApp = () => {
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
   };
 
   const sendMessage = async () => {
@@ -110,6 +110,93 @@ const ChatApp = () => {
     }
   };
 
+  const sendMessageStream = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      text: inputMessage,
+      sender: 'user',
+      timestamp: new Date().toLocaleTimeString()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      const botMessage = {
+        id: `bot-${Date.now()}`,
+        text: '',
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString()
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: inputMessage,
+          session_id: sessionId
+        })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const {value, done} = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === 'char') {
+                setMessages(prev => prev.map(msg =>
+                  msg.id === botMessage.id
+                    ? {...msg, text: msg.text + data.char}
+                    : msg
+                ));
+              } else if (data.type === 'error') {
+                setMessages(prev => prev.map(msg =>
+                  msg.id === botMessage.id
+                    ? {...msg, text: '오류가 발생했습니다: ' + data.error, isError: true}
+                    : msg
+                ));
+                break;
+              }
+            } catch (e) {
+              console.error('스트림 데이터 파싱 오류:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('스트리밍 메시지 전송 실패:', error);
+
+      const errorMessage = {
+        id: `error-${Date.now()}`,
+        text: '죄송합니다. 오류가 발생했습니다. 다시 시도해주세요.',
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString(),
+        isError: true
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const clearChat = async () => {
     try {
       await axios.delete(`${API_BASE_URL}/api/v1/chat/history/${sessionId}`);
@@ -122,7 +209,7 @@ const ChatApp = () => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      sendMessageStream();
     }
   };
 
@@ -185,7 +272,7 @@ const ChatApp = () => {
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef}/>
       </div>
 
       <div className="chat-input">
@@ -200,7 +287,7 @@ const ChatApp = () => {
             rows={1}
           />
           <button
-            onClick={sendMessage}
+            onClick={sendMessageStream}
             disabled={isLoading || !inputMessage.trim() || !isConnected}
             className="send-btn"
           >

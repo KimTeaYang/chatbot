@@ -1,16 +1,17 @@
+
 """
 AI 서비스 - Gemini API 통신
 """
-import os
-from typing import Dict
-from langchain_core.chat_history import BaseChatMessageHistory, InMemoryChatMessageHistory
+from langchain_community.chat_message_histories import RedisChatMessageHistory
+from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langfuse.langchain import CallbackHandler
+from redis import Redis
 
 from app.config.settings import settings
 from app.core.exceptions import AIServiceException
-from langfuse.langchain import CallbackHandler
 
 handler = CallbackHandler()
 
@@ -19,6 +20,13 @@ class AIService:
         self.api_key = settings.GOOGLE_API_KEY
         if not self.api_key:
             raise AIServiceException("GOOGLE_API_KEY 환경 변수를 설정해주세요.")
+
+        # Redis 클라이언트 초기화
+        self.redis_client = Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=0
+        )
 
         # 시스템 프롬프트 설정
         self.system_prompt = """
@@ -34,9 +42,6 @@ class AIService:
             temperature=settings.AI_TEMPERATURE,
             max_tokens=settings.AI_MAX_TOKENS
         )
-
-        # 세션별 채팅 히스토리 저장소
-        self.store: Dict[str, BaseChatMessageHistory] = {}
 
         # 프롬프트 템플릿 생성
         self.prompt = ChatPromptTemplate.from_messages([
@@ -56,11 +61,15 @@ class AIService:
             history_messages_key="history"
         )
 
-    def get_session_history(self, session_id: str) -> BaseChatMessageHistory:
-        """세션 히스토리를 가져오거나 생성합니다."""
-        if session_id not in self.store:
-            self.store[session_id] = InMemoryChatMessageHistory()
-        return self.store[session_id]
+    @staticmethod
+    def get_session_history(session_id: str) -> BaseChatMessageHistory:
+        """Redis 기반 세션 히스토리를 가져옵니다."""
+        return RedisChatMessageHistory(
+            session_id=session_id,
+            url=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
+            key_prefix="chat_history:",
+            ttl=86400  # 24시간 후 만료
+        )
 
     async def generate_response(self, message: str, session_id: str) -> str:
         """AI 응답 생성"""
@@ -87,6 +96,5 @@ class AIService:
 
     async def clear_session(self, session_id: str):
         """세션 히스토리 삭제"""
-        if session_id in self.store:
-            self.store[session_id].clear()
-            del self.store[session_id]
+        history = self.get_session_history(session_id)
+        history.clear()

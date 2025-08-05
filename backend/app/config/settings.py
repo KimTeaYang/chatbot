@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = Field(..., env="LANGFUSE_SECRET_KEY")
     LANGFUSE_HOST: str = Field(..., env="LANGFUSE_HOST")
 
+    # Redis 설정
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str = ""  # 필요한 경우 설정
+
     class Config:
         env_file = ".env"
         case_sensitive = True

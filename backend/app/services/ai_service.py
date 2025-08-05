@@ -10,7 +10,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config.settings import settings
 from app.core.exceptions import AIServiceException
+from langfuse.langchain import CallbackHandler
 
+handler = CallbackHandler()
 
 class AIService:
     def __init__(self):
@@ -66,7 +68,13 @@ class AIService:
             # 비동기로 대화 실행
             response = await self.conversation.ainvoke(
                 {"input": message},
-                config={"configurable": {"session_id": session_id}}
+                config={
+                    "configurable": {"session_id": session_id},
+                    "callbacks": [handler],
+                    "metadata": {
+                        "langfuse_session_id": session_id,
+                    },
+                }
             )
 
             # AIMessage 객체에서 content 추출

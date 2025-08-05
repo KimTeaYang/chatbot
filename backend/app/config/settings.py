@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field("your-secret-key-here", env="SECRET_KEY")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    #LangFuse
+    LANGFUSE_PUBLIC_KEY: str = Field(..., env="LANGFUSE_PUBLIC_KEY")
+    LANGFUSE_SECRET_KEY: str = Field(..., env="LANGFUSE_SECRET_KEY")
+    LANGFUSE_HOST: str = Field(..., env="LANGFUSE_HOST")
+
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -10,6 +10,7 @@ const ChatApp = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState('default');
   const [isConnected, setIsConnected] = useState(false);
+  const [sessions, setSessions] = useState([]); // 세션 목록 상태 추가
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -18,6 +19,7 @@ const ChatApp = () => {
     checkConnection();
     // 이전 대화 기록 불러오기
     loadChatHistory();
+    loadSessions(); // 세션 목록 로드
   }, [sessionId]);
 
   useEffect(() => {
@@ -63,6 +65,31 @@ const ChatApp = () => {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
+  };
+
+  // 세션 목록 로드 함수
+  const loadSessions = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/v1/chat/sessions`);
+      setSessions([
+          {
+            "id": "session-1234",
+            "created_at": "2025-08-05T10:00:00Z"
+          },
+          {
+            "id": "session-5678",
+            "created_at": "2025-08-05T11:30:00Z"
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('세션 목록 로딩 실패:', error);
+    }
+  };
+
+  // 세션 선택 핸들러
+  const handleSessionSelect = (selectedSessionId) => {
+    setSessionId(selectedSessionId);
   };
 
   const sendMessage = async () => {
@@ -220,63 +247,64 @@ const ChatApp = () => {
   };
 
   return (
-    <div className="chat-app">
-      <div className="chat-header">
-        <h1>🤖 Gemini 챗봇</h1>
-        <div className="header-controls">
-          <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
-            {isConnected ? '🟢 연결됨' : '🔴 연결 안됨'}
+    <div className="chat-container">
+      <div className="chat-app">
+        <div className="chat-header">
+          <h1>🤖 Gemini 챗봇</h1>
+          <div className="header-controls">
+            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+              {isConnected ? '🟢 연결됨' : '🔴 연결 안됨'}
+            </div>
+            <button onClick={handleNewSession} className="new-session-btn">
+              새 세션
+            </button>
+            <button onClick={clearChat} className="clear-btn">
+              기록 삭제
+            </button>
           </div>
-          <button onClick={handleNewSession} className="new-session-btn">
-            새 세션
-          </button>
-          <button onClick={clearChat} className="clear-btn">
-            기록 삭제
-          </button>
         </div>
-      </div>
 
-      <div className="chat-messages">
-        {messages.length === 0 ? (
-          <div className="welcome-message">
-            <h3>안녕하세요! 무엇을 도와드릴까요?</h3>
-            <p>궁금한 것이 있으면 언제든 물어보세요.</p>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`message ${message.sender} ${message.isError ? 'error' : ''}`}
-            >
+        <div className="chat-messages">
+          {messages.length === 0 ? (
+            <div className="welcome-message">
+              <h3>안녕하세요! 무엇을 도와드릴까요?</h3>
+              <p>궁금한 것이 있으면 언제든 물어보세요.</p>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`message ${message.sender} ${message.isError ? 'error' : ''}`}
+              >
+                <div className="message-content">
+                  <div className="message-text">
+                    {message.text}
+                  </div>
+                  <div className="message-timestamp">
+                    {message.timestamp}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+
+          {isLoading && (
+            <div className="message bot">
               <div className="message-content">
-                <div className="message-text">
-                  {message.text}
-                </div>
-                <div className="message-timestamp">
-                  {message.timestamp}
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </div>
               </div>
             </div>
-          ))
-        )}
+          )}
 
-        {isLoading && (
-          <div className="message bot">
-            <div className="message-content">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-          </div>
-        )}
+          <div ref={messagesEndRef}/>
+        </div>
 
-        <div ref={messagesEndRef}/>
-      </div>
-
-      <div className="chat-input">
-        <div className="input-container">
+        <div className="chat-input">
+          <div className="input-container">
           <textarea
             ref={inputRef}
             value={inputMessage}
@@ -286,18 +314,38 @@ const ChatApp = () => {
             disabled={isLoading || !isConnected}
             rows={1}
           />
-          <button
-            onClick={sendMessageStream}
-            disabled={isLoading || !inputMessage.trim() || !isConnected}
-            className="send-btn"
-          >
-            {isLoading ? '전송중...' : '전송'}
-          </button>
+            <button
+              onClick={sendMessageStream}
+              disabled={isLoading || !inputMessage.trim() || !isConnected}
+              className="send-btn"
+            >
+              {isLoading ? '전송중...' : '전송'}
+            </button>
+          </div>
+        </div>
+
+        <div className="session-info">
+          세션 ID: {sessionId}
         </div>
       </div>
-
-      <div className="session-info">
-        세션 ID: {sessionId}
+      <div className="sessions-sidebar">
+        <h2>세션 목록</h2>
+        <div className="session-list">
+          {sessions.map((session) => (
+            <div
+              key={session.id}
+              className={`session-list-item ${session.id === sessionId ? 'active' : ''}`}
+              onClick={() => handleSessionSelect(session.id)}
+            >
+              <div className="session-list-info">
+                <div className="session-name">세션 {session.id}</div>
+                <div className="session-date">
+                  {new Date(session.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
